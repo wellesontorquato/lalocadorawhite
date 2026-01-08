@@ -14,34 +14,139 @@ export default function Formulario() {
   });
 
   const [total, setTotal] = useState<number | null>(null);
+  const [avisoData, setAvisoData] = useState<string>("");
 
-  const hoje = new Date().toISOString().split("T")[0];
+  // =========================
+  // Helpers de datas (sem libs)
+  // =========================
+  const pad2 = (n: number) => String(n).padStart(2, "0");
 
+  const toISODate = (d: Date) =>
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+  // evita bug timezone (sempre meio-dia)
+  const parseISODate = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0);
+  };
+
+  const addDaysISO = (iso: string, days: number) => {
+    const d = parseISODate(iso);
+    d.setDate(d.getDate() + days);
+    return toISODate(d);
+  };
+
+  const isSundayISO = (iso: string) => {
+    if (!iso) return false;
+    return parseISODate(iso).getDay() === 0;
+  };
+
+  // se cair no domingo, avança até segunda
+  const nextNonSundayISO = (iso: string) => {
+    if (!iso) return iso;
+    const d = parseISODate(iso);
+    while (d.getDay() === 0) d.setDate(d.getDate() + 1);
+    return toISODate(d);
+  };
+
+  // hoje em ISO (timezone-safe)
+  const hoje = useMemo(() => toISODate(new Date()), []);
+
+  // menor dia permitido para retirada (se hoje for domingo, começa segunda)
+  const minDataRetirada = useMemo(() => nextNonSundayISO(hoje), [hoje]);
+
+  // mínimo de devolução (sempre +1 dia da retirada; se cair domingo, pula)
   const minDataDevolucao = useMemo(() => {
-    if (!form.dataRetirada) return hoje;
-    const data = new Date(form.dataRetirada);
-    data.setDate(data.getDate() + 1);
-    return data.toISOString().split("T")[0];
-  }, [form.dataRetirada, hoje]);
+    const baseRetirada = form.dataRetirada ? nextNonSundayISO(form.dataRetirada) : minDataRetirada;
 
+    let min = addDaysISO(baseRetirada, 1);
+    min = nextNonSundayISO(min);
+
+    return min;
+  }, [form.dataRetirada, minDataRetirada]);
+
+  // =========================
+  // Remove domingo automaticamente (retirada/devolução)
+  // =========================
+  const onChangeRetirada = (value: string) => {
+    setAvisoData("");
+
+    if (!value) {
+      setForm((prev) => ({ ...prev, dataRetirada: "", dataDevolucao: "" }));
+      return;
+    }
+
+    const retiradaValida = nextNonSundayISO(value);
+
+    if (isSundayISO(value)) {
+      setAvisoData("Domingo é fechado. Ajustamos sua retirada para a segunda-feira.");
+    }
+
+    // reset devolução para forçar reescolha (min muda)
+    setForm((prev) => ({ ...prev, dataRetirada: retiradaValida, dataDevolucao: "" }));
+  };
+
+  const onChangeDevolucao = (value: string) => {
+    setAvisoData("");
+
+    if (!value) {
+      setForm((prev) => ({ ...prev, dataDevolucao: "" }));
+      return;
+    }
+
+    let devolucaoValida = nextNonSundayISO(value);
+
+    if (isSundayISO(value)) {
+      setAvisoData("Domingo é fechado. Ajustamos sua devolução para a segunda-feira.");
+    }
+
+    if (devolucaoValida < minDataDevolucao) {
+      setAvisoData("Devolução ajustada para a primeira data disponível.");
+      devolucaoValida = minDataDevolucao;
+    }
+
+    setForm((prev) => ({ ...prev, dataDevolucao: devolucaoValida }));
+  };
+
+  // limpa aviso sozinho
   useEffect(() => {
-    if (form.dataDevolucao && form.dataRetirada && form.dataDevolucao <= form.dataRetirada) {
+    if (!avisoData) return;
+    const t = setTimeout(() => setAvisoData(""), 3500);
+    return () => clearTimeout(t);
+  }, [avisoData]);
+
+  // se por qualquer motivo devolução ficar inválida (ex.: mudou retirada via state), limpa
+  useEffect(() => {
+    if (!form.dataRetirada) return;
+    if (!form.dataDevolucao) return;
+
+    const retiradaValida = nextNonSundayISO(form.dataRetirada);
+    const devolucaoValida = nextNonSundayISO(form.dataDevolucao);
+
+    if (devolucaoValida <= retiradaValida || devolucaoValida < minDataDevolucao) {
       setForm((prev) => ({ ...prev, dataDevolucao: "" }));
     }
-  }, [form.dataRetirada]);
+  }, [form.dataRetirada, minDataDevolucao]); // intencional
 
+  // =========================
+  // Cálculo (datas já válidas)
+  // =========================
   useEffect(() => {
     if (form.carro && form.dataRetirada && form.dataDevolucao) {
       const carroSelecionado = FROTA.find((c) => c.nome === form.carro);
-      const dataInicio = new Date(form.dataRetirada);
-      const dataFim = new Date(form.dataDevolucao);
+      if (!carroSelecionado) return setTotal(null);
+
+      const dataInicio = parseISODate(form.dataRetirada);
+      const dataFim = parseISODate(form.dataDevolucao);
 
       const diffInMs = dataFim.getTime() - dataInicio.getTime();
       const diffDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
 
-      if (diffDays > 0 && carroSelecionado) {
+      if (diffDays > 0) {
         const diariaAplicada =
-          form.quilometragem === "Km Livre" ? carroSelecionado.precoKmLivre : carroSelecionado.preco300km;
+          form.quilometragem === "Km Livre"
+            ? carroSelecionado.precoKmLivre
+            : carroSelecionado.preco300km;
 
         const valorFinal = diffDays * diariaAplicada + 50;
         setTotal(valorFinal);
@@ -83,6 +188,26 @@ Como podemos prosseguir?`;
             <h2 className="text-5xl md:text-6xl font-black tracking-[-0.05em] leading-[0.9] uppercase italic">
               VAMOS <br /> <span className="text-brand-blue">RESERVAR?</span>
             </h2>
+
+            {/* Texto fixo na página (regra clara) */}
+            <div className="mt-6 border border-white/10 bg-white/[0.03] px-4 py-3 text-[11px] uppercase tracking-[0.22em] font-black text-white/60">
+              Domingos: fechado. O calendário não permite retirada/devolução no domingo.
+            </div>
+
+            {/* Aviso UX rápido (auto-correções) */}
+            <AnimatePresence>
+              {avisoData && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.35 }}
+                  className="mt-4 border border-brand-blue/30 bg-brand-blue/10 px-4 py-3 text-[11px] uppercase tracking-[0.25em] font-black text-brand-blue"
+                >
+                  {avisoData}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <AnimatePresence>
@@ -107,50 +232,66 @@ Como podemos prosseguir?`;
         </div>
 
         <form onSubmit={enviarWhats} className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-10">
-          
           {/* Input Nome */}
           <div className="group flex flex-col gap-3 border-b border-white/10 hover:border-brand-blue/50 transition-colors duration-500 pb-2">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">01. Nome</label>
+            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">
+              01. Nome
+            </label>
             <input
               required
               type="text"
               placeholder="DIGITE AQUI"
               className="bg-transparent text-xl font-black uppercase outline-none placeholder:text-white/5"
+              value={form.nome}
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
             />
           </div>
 
           {/* Select Veículo */}
           <div className="group flex flex-col gap-3 border-b border-white/10 hover:border-brand-blue/50 transition-colors duration-500 pb-2">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">02. Veículo</label>
+            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">
+              02. Veículo
+            </label>
             <select
               required
               className="bg-transparent text-xl font-black uppercase outline-none cursor-pointer"
+              value={form.carro}
               onChange={(e) => setForm({ ...form, carro: e.target.value })}
             >
-              <option value="" className="bg-brand-dark">SELECIONAR</option>
+              <option value="" className="bg-brand-dark">
+                SELECIONAR
+              </option>
               {FROTA.map((c) => (
-                <option key={c.id} value={c.nome} className="bg-brand-dark">{c.nome}</option>
+                <option key={c.id} value={c.nome} className="bg-brand-dark">
+                  {c.nome}
+                </option>
               ))}
             </select>
           </div>
 
           {/* Date Retirada */}
           <div className="group flex flex-col gap-3 border-b border-white/10 hover:border-brand-blue/50 transition-colors duration-500 pb-2">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">03. Retirada</label>
+            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">
+              03. Retirada
+            </label>
             <input
               required
               type="date"
-              min={hoje}
+              min={minDataRetirada}
               value={form.dataRetirada}
               className="bg-transparent text-lg font-black outline-none [color-scheme:dark]"
-              onChange={(e) => setForm({ ...form, dataRetirada: e.target.value })}
+              onChange={(e) => onChangeRetirada(e.target.value)}
             />
+            <p className="text-[10px] uppercase tracking-[0.25em] text-white/20">
+              Domingos não aparecem como opção.
+            </p>
           </div>
 
           {/* Date Devolução */}
           <div className="group flex flex-col gap-3 border-b border-white/10 hover:border-brand-blue/50 transition-colors duration-500 pb-2">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">04. Devolução</label>
+            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 group-hover:text-brand-blue transition-colors duration-500 font-bold">
+              04. Devolução
+            </label>
             <input
               required
               type="date"
@@ -158,13 +299,15 @@ Como podemos prosseguir?`;
               value={form.dataDevolucao}
               disabled={!form.dataRetirada}
               className="bg-transparent text-lg font-black outline-none [color-scheme:dark] disabled:opacity-20"
-              onChange={(e) => setForm({ ...form, dataDevolucao: e.target.value })}
+              onChange={(e) => onChangeDevolucao(e.target.value)}
             />
           </div>
 
           {/* Quilometragem */}
           <div className="md:col-span-2 space-y-4">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-bold">05. Quilometragem</label>
+            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-bold">
+              05. Quilometragem
+            </label>
             <div className="flex gap-8">
               {["300km", "Km Livre"].map((km) => (
                 <label key={km} className="flex items-center gap-3 cursor-pointer group">
@@ -176,7 +319,13 @@ Como podemos prosseguir?`;
                     onChange={(e) => setForm({ ...form, quilometragem: e.target.value })}
                     className="accent-brand-blue"
                   />
-                  <span className={`text-lg font-black uppercase transition-colors duration-500 ${form.quilometragem === km ? "text-brand-blue" : "text-white/20 group-hover:text-white/50"}`}>
+                  <span
+                    className={`text-lg font-black uppercase transition-colors duration-500 ${
+                      form.quilometragem === km
+                        ? "text-brand-blue"
+                        : "text-white/20 group-hover:text-white/50"
+                    }`}
+                  >
                     {km}
                   </span>
                 </label>
@@ -184,10 +333,10 @@ Como podemos prosseguir?`;
             </div>
           </div>
 
-          {/* Botão Solicitar Agora - Ajustado com o novo Hover */}
+          {/* Botão */}
           <div className="md:col-span-2 flex justify-end pt-4">
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="group flex items-center gap-6 text-white transition-all duration-500 ease-out hover:translate-x-3"
             >
               <span className="text-3xl md:text-4xl font-black uppercase group-hover:text-brand-blue transition-colors duration-500">
