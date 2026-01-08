@@ -65,7 +65,7 @@ export default function Hero() {
           className="flex flex-col md:flex-row gap-6 items-center"
         >
           <a
-            href="#frota"
+            href="/frota"
             className="group relative px-14 py-5 overflow-hidden border border-white/10 transition-all duration-500"
           >
             <span className="relative z-10 text-white uppercase text-[10px] tracking-[0.4em] font-black group-hover:text-brand-dark transition-colors duration-500">
