@@ -6,6 +6,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Calculator } from "lucide-react";
 
 export default function FormularioContato() {
+  const CONTACT = {
+    // ✅ só dígitos (DDD + número) — sem +, sem espaço, sem parênteses
+    phoneE164Digits: "5582996906585",
+  } as const;
+
   const [form, setForm] = useState({
     nome: "",
     carro: "",
@@ -98,12 +103,10 @@ export default function FormularioContato() {
 
     const retiradaValida = nextNonSundayISO(value);
 
-    // se user escolheu domingo, só dá um aviso curto (opcional) e segue
     if (isSundayISO(value)) {
       setAvisoData("Domingo é fechado. Ajustamos sua retirada para a segunda-feira.");
     }
 
-    // reset devolução pra forçar reescolha dentro do mínimo correto
     setForm((prev) => ({ ...prev, dataRetirada: retiradaValida, dataDevolucao: "" }));
   };
 
@@ -121,7 +124,6 @@ export default function FormularioContato() {
       setAvisoData("Domingo é fechado. Ajustamos sua devolução para a segunda-feira.");
     }
 
-    // respeita mínimo (se ficou antes, corrige pro mínimo)
     if (devolucaoValida < minDataDevolucao) {
       setAvisoData("Devolução ajustada para a primeira data disponível.");
       devolucaoValida = minDataDevolucao;
@@ -165,18 +167,43 @@ export default function FormularioContato() {
     } else {
       setTotal(null);
     }
-  }, [form]);
+  }, [form, minDataDevolucao, minDataRetirada]);
+
+  // ✅ habilita CTA só quando estiver tudo preenchido + total calculado
+  const pronto = Boolean(
+    form.nome.trim() &&
+      form.carro &&
+      form.dataRetirada &&
+      form.dataDevolucao &&
+      total !== null
+  );
 
   // =========================
-  // Submit
+  // Submit -> WhatsApp (mobile + desktop)
   // =========================
-  const enviarFormulario = (e: React.FormEvent) => {
+  const enviarFormulario = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    console.log("Reserva solicitada:", {
-      ...form,
-      total,
-    });
+    // fecha teclado no mobile pra evitar "primeiro toque só fecha teclado"
+    (document.activeElement as HTMLElement | null)?.blur?.();
+
+    if (!pronto || total === null) return;
+
+    const msg = [
+      `Olá! Quero solicitar uma reserva na LA Locadora.`,
+      ``,
+      `Nome: ${form.nome}`,
+      `Carro: ${form.carro}`,
+      `Retirada: ${formatBR(form.dataRetirada)}`,
+      `Devolução: ${formatBR(form.dataDevolucao)}`,
+      `Quilometragem: ${form.quilometragem}`,
+      `Estimativa (c/ lavagem): R$ ${total.toLocaleString("pt-BR")}`,
+    ].join("\n");
+
+    const url = `https://wa.me/${CONTACT.phoneE164Digits}?text=${encodeURIComponent(msg)}`;
+
+    // iOS/Safari e mobile em geral: window.location é mais confiável que window.open
+    window.location.href = url;
   };
 
   return (
@@ -220,9 +247,13 @@ export default function FormularioContato() {
               >
                 <div className="flex items-center gap-2 mb-2 text-brand-blue">
                   <Calculator size={14} />
-                  <span className="text-[10px] font-black uppercase">Estimativa (c/ Lavagem)</span>
+                  <span className="text-[10px] font-black uppercase">
+                    Estimativa (c/ Lavagem)
+                  </span>
                 </div>
-                <div className="text-4xl font-black italic">R$ {total.toLocaleString("pt-BR")}</div>
+                <div className="text-4xl font-black italic">
+                  R$ {total.toLocaleString("pt-BR")}
+                </div>
                 <p className="text-[9px] text-gray-500 mt-2 uppercase tracking-tighter">
                   *Taxa de lavagem inclusa
                 </p>
@@ -351,13 +382,17 @@ export default function FormularioContato() {
           <div className="md:col-span-2 flex justify-end pt-4">
             <button
               type="submit"
-              className="group flex items-center gap-6 text-white transition-all duration-500 ease-out hover:translate-x-3"
+              disabled={!pronto}
+              className="group flex items-center gap-6 text-white transition-all duration-500 ease-out hover:translate-x-3 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-x-0 cursor-text md:cursor-text"
             >
               <span className="text-3xl md:text-4xl font-black uppercase group-hover:text-brand-blue transition-colors duration-500">
                 SOLICITAR AGORA
               </span>
               <div className="w-14 h-14 rounded-full border border-white/20 flex items-center justify-center group-hover:bg-brand-blue group-hover:border-brand-blue transition-all duration-500">
-                <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform duration-500" />
+                <ArrowRight
+                  size={24}
+                  className="group-hover:translate-x-1 transition-transform duration-500"
+                />
               </div>
             </button>
           </div>
