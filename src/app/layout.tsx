@@ -72,7 +72,7 @@ export const metadata: Metadata = {
     title: "L.A. LOCADORA | Experiência Premium em Locação",
     description:
       "Elevando o padrão de locação de veículos exclusivos. Conforto, agilidade e segurança em cada quilômetro.",
-    images: ["/og-image-v2..png"],
+    images: ["/og-image-v2.png"],
   },
 
   // ✅ Ícones
@@ -94,7 +94,7 @@ export default function RootLayout({
   return (
     <html lang="pt-br" className="scroll-smooth">
       <body
-        className={`${inter.variable} ${syne.variable} font-sans antialiased bg-brand-dark text-white`}
+        className={`${inter.variable} ${syne.variable} font-sans antialiased bg-slate-50 text-slate-900`}
       >
         <NextTopLoader
           color="#87CEEB"

@@ -12,8 +12,15 @@
 }
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ffffff;
+  /* Tema CLARO (base) */
+  --background: #f8fafc;  /* slate-50 */
+  --foreground: #0f172a;  /* slate-900 */
+
+  /* Extras úteis (sem mudar sua estrutura; só dá base pro visual “site grande”) */
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;   /* slate-100 */
+  --border: #e2e8f0;      /* slate-200 */
+  --muted: #475569;       /* slate-600 */
 }
 
 @layer base {

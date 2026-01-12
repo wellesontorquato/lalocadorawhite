@@ -5,9 +5,14 @@ import { Fuel, Gauge, ArrowUpRight, Milestone } from "lucide-react";
 
 type FrotaProps = {
   showHeader?: boolean;
-  showDivider?: boolean;     // ✅ controla a linha de cima
-  contactHref?: string;      // ✅ permite trocar o alvo do botão "RESERVAR"
-  containerClassName?: string; // ✅ caso queira ajustar padding/margem em páginas específicas
+  showDivider?: boolean;
+  contactHref?: string;
+  containerClassName?: string;
+
+  // NOVOS
+  headerClassName?: string; // controlar PT do header
+  compact?: boolean; // reduz espaços verticais
+  cardless?: boolean; // remove “quadrado” branco dos cards
 };
 
 export default function Frota({
@@ -15,10 +20,18 @@ export default function Frota({
   showDivider = true,
   contactHref = "/contato",
   containerClassName = "",
+
+  headerClassName = "",
+  compact = false,
+  cardless = false,
 }: FrotaProps) {
   return (
-    <div className={`bg-brand-dark font-display ${showDivider ? "border-t border-white/5" : ""}`}>
-      <div className={`max-w-[1400px] mx-auto px-2 md:px-0 ${containerClassName}`}>
+    <section
+      className={`font-display ${
+        showDivider ? "border-t border-slate-200" : ""
+      } bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_55%,#ffffff_100%)]`}
+    >
+      <div className={`max-w-[1400px] mx-auto px-4 md:px-0 ${containerClassName}`}>
         {/* Cabeçalho (opcional) */}
         {showHeader && (
           <motion.div
@@ -26,23 +39,40 @@ export default function Frota({
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
             viewport={{ once: true }}
-            className="mb-12 md:mb-16"
+            className={[
+              compact ? "mb-8 md:mb-10" : "mb-10 md:mb-14",
+              compact ? "pt-0" : "pt-10",
+              headerClassName,
+            ].join(" ")}
           >
-            <span className="pt-6 text-brand-blue font-bold text-[10px] uppercase tracking-[0.45em] mb-5 block">
-              Curadoria de Veículos
-            </span>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue/15 border border-brand-blue/20" />
+              <span className="text-slate-500 font-black text-[10px] uppercase tracking-[0.45em]">
+                Curadoria de Veículos
+              </span>
+            </div>
 
-            <h2 className="text-6xl md:text-9xl font-black tracking-[-0.06em] leading-[0.85] text-white uppercase italic">
-              Nossa <br />
-              <span className="text-brand-blue">Seleção.</span>
+            <h2 className="text-5xl md:text-7xl font-black tracking-[-0.06em] leading-[0.9] text-slate-900 uppercase italic">
+              Nossa <span className="text-brand-blue not-italic">Seleção</span>
+              <span className="text-slate-300">.</span>
             </h2>
+
+            <p className="mt-4 text-slate-600 max-w-2xl font-sans text-base md:text-lg leading-relaxed">
+              Escolha o carro ideal com transparência, conforto e atendimento premium — do jeito L.A.
+            </p>
           </motion.div>
         )}
 
         {/* Grid de Veículos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 md:gap-x-16 gap-y-14 md:gap-y-20">
+        <div
+          className={[
+            "grid grid-cols-1 md:grid-cols-2",
+            compact ? "gap-x-8 md:gap-x-10 gap-y-8 md:gap-y-10" : "gap-x-10 md:gap-x-12 gap-y-10 md:gap-y-12",
+            compact ? "pb-8 md:pb-10" : "pb-10 md:pb-14",
+          ].join(" ")}
+        >
           {FROTA.map((carro: Carro, index: number) => (
-            <motion.div
+            <motion.article
               key={carro.id}
               initial={{ opacity: 0, y: 26 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -50,80 +80,170 @@ export default function Frota({
               viewport={{ once: true }}
               className="group"
             >
-              {/* Imagem */}
-              <div className="relative aspect-[16/9] overflow-hidden bg-brand-gray/10 mb-8 transition-all duration-700 group-hover:bg-brand-gray/20">
-                <img
-                  src={carro.imagem}
-                  alt={carro.nome}
-                  className="w-full h-full object-cover brightness-90 group-hover:brightness-100 transform group-hover:scale-105 transition-all duration-1000"
-                />
-                <div className="absolute top-6 left-6">
-                  <span className="bg-brand-blue text-brand-dark text-[8px] font-black px-3 py-1 uppercase tracking-widest">
-                    {carro.categoria}
-                  </span>
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className="flex flex-col gap-7">
-                <div className="space-y-3">
-                  <h3 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none group-hover:text-brand-blue transition-colors">
-                    {carro.nome}
-                  </h3>
-
-                  <div className="flex flex-wrap gap-5 text-gray-500 text-[10px] uppercase tracking-widest font-bold">
-                    <span className="flex items-center gap-2">
-                      <Gauge size={14} className="text-brand-blue" /> {carro.cambio}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <Fuel size={14} className="text-brand-blue" /> {carro.combustivel}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <Milestone size={14} className="text-brand-blue" /> {carro.lugares} Lugares
-                    </span>
-                  </div>
-                </div>
-
-                {/* Preços + CTA */}
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-7 pt-6 border-t border-white/5">
-                  <div className="flex gap-10">
-                    <div className="space-y-1">
-                      <span className="text-gray-500 text-[8px] font-black uppercase tracking-widest block">
-                        Diária até 300km
-                      </span>
-                      <p className="text-4xl font-black text-white tracking-tighter leading-none">
-                        <span className="text-brand-blue text-sm mr-1 italic">R$</span>
-                        {carro.preco300km}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-brand-blue text-[8px] font-black uppercase tracking-widest block">
-                        Diária KM Livre
-                      </span>
-                      <p className="text-4xl font-black text-white tracking-tighter leading-none">
-                        <span className="text-brand-blue text-sm mr-1 italic">R$</span>
-                        {carro.precoKmLivre}
-                      </p>
-                    </div>
-                  </div>
-
-                  <a
-                    href={contactHref}
-                    className="inline-flex items-center gap-3 text-white text-[10px] font-black uppercase tracking-[0.4em] group-hover:text-brand-blue transition-all"
-                  >
-                    RESERVAR{" "}
-                    <ArrowUpRight
-                      size={18}
-                      className="group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform"
+              {/* ===== CARDLESS (SEM QUADRADO) ===== */}
+              {cardless ? (
+                <div className="rounded-3xl overflow-hidden">
+                  {/* Imagem */}
+                  <div className="relative aspect-[16/9] overflow-hidden bg-slate-100 rounded-3xl">
+                    <img
+                      src={carro.imagem}
+                      alt={carro.nome}
+                      className="w-full h-full object-cover transform group-hover:scale-[1.04] transition-transform duration-700"
                     />
-                  </a>
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/35 via-transparent to-transparent opacity-70" />
+
+                    {/* Badge categoria */}
+                    <div className="absolute top-5 left-5">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md border border-white/70 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-900 shadow-sm">
+                        <span className="h-2 w-2 rounded-full bg-brand-blue" />
+                        {carro.categoria}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Conteúdo (sem caixa branca) */}
+                  <div className="px-2 md:px-3 pt-6">
+                    <div className="space-y-4">
+                      <h3 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight uppercase leading-none">
+                        {carro.nome}
+                      </h3>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-white/70 border border-slate-200 px-3 py-2 text-[10px] uppercase tracking-widest font-black text-slate-700">
+                          <Gauge size={14} className="text-brand-blue" />
+                          {carro.cambio}
+                        </span>
+
+                        <span className="inline-flex items-center gap-2 rounded-full bg-white/70 border border-slate-200 px-3 py-2 text-[10px] uppercase tracking-widest font-black text-slate-700">
+                          <Fuel size={14} className="text-brand-blue" />
+                          {carro.combustivel}
+                        </span>
+
+                        <span className="inline-flex items-center gap-2 rounded-full bg-white/70 border border-slate-200 px-3 py-2 text-[10px] uppercase tracking-widest font-black text-slate-700">
+                          <Milestone size={14} className="text-brand-blue" />
+                          {carro.lugares} lugares
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-7 pt-6 border-t border-slate-200 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+                      <div className="flex gap-8">
+                        <div className="space-y-1">
+                          <span className="text-slate-600 text-[10px] font-black uppercase tracking-widest block">
+                            Diária até 300km
+                          </span>
+                          <p className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                            <span className="text-brand-blue text-sm mr-1 italic">R$</span>
+                            {carro.preco300km}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-slate-600 text-[10px] font-black uppercase tracking-widest block">
+                            Diária km livre
+                          </span>
+                          <p className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                            <span className="text-brand-blue text-sm mr-1 italic">R$</span>
+                            {carro.precoKmLivre}
+                          </p>
+                        </div>
+                      </div>
+
+                      <a
+                        href={contactHref}
+                        className="inline-flex items-center gap-2 rounded-full px-5 py-3 bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest
+                                 hover:bg-brand-blue hover:text-slate-900 transition-all shadow-lg shadow-slate-900/15"
+                      >
+                        Reservar
+                        <ArrowUpRight
+                          size={18}
+                          className="group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform"
+                        />
+                      </a>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
+              ) : (
+                /* ===== PADRÃO (COM QUADRADO) ===== */
+                <div className="rounded-3xl bg-white border border-slate-200 shadow-[0_20px_70px_-55px_rgba(2,6,23,0.35)] overflow-hidden">
+                  <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                    <img
+                      src={carro.imagem}
+                      alt={carro.nome}
+                      className="w-full h-full object-cover transform group-hover:scale-[1.04] transition-transform duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/35 via-transparent to-transparent opacity-70" />
+                    <div className="absolute top-5 left-5">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md border border-white/70 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-900 shadow-sm">
+                        <span className="h-2 w-2 rounded-full bg-brand-blue" />
+                        {carro.categoria}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-7 md:p-8">
+                    <div className="space-y-4">
+                      <h3 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight uppercase leading-none">
+                        {carro.nome}
+                      </h3>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 border border-slate-200 px-3 py-2 text-[10px] uppercase tracking-widest font-black text-slate-600">
+                          <Gauge size={14} className="text-brand-blue" />
+                          {carro.cambio}
+                        </span>
+
+                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 border border-slate-200 px-3 py-2 text-[10px] uppercase tracking-widest font-black text-slate-600">
+                          <Fuel size={14} className="text-brand-blue" />
+                          {carro.combustivel}
+                        </span>
+
+                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 border border-slate-200 px-3 py-2 text-[10px] uppercase tracking-widest font-black text-slate-600">
+                          <Milestone size={14} className="text-brand-blue" />
+                          {carro.lugares} lugares
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-7 pt-6 border-t border-slate-200 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+                      <div className="flex gap-8">
+                        <div className="space-y-1">
+                          <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest block">
+                            Diária até 300km
+                          </span>
+                          <p className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                            <span className="text-brand-blue text-sm mr-1 italic">R$</span>
+                            {carro.preco300km}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest block">
+                            Diária km livre
+                          </span>
+                          <p className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                            <span className="text-brand-blue text-sm mr-1 italic">R$</span>
+                            {carro.precoKmLivre}
+                          </p>
+                        </div>
+                      </div>
+
+                      <a
+                        href={contactHref}
+                        className="inline-flex items-center gap-2 rounded-full px-5 py-3 bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest
+                                 hover:bg-brand-blue hover:text-slate-900 transition-all shadow-lg shadow-slate-900/15"
+                      >
+                        Reservar
+                        <ArrowUpRight size={18} className="transition-transform" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.article>
           ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

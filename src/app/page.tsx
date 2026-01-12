@@ -4,12 +4,11 @@ import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import Frota from "@/components/Frota";
 import Empresa from "@/components/Empresa";
-import Formulario from "@/components/Formulario";
 import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main className="bg-brand-dark min-h-screen overflow-x-hidden">
+    <main className="bg-slate-50 min-h-screen overflow-x-hidden">
       <Navbar />
 
       {/* HERO */}
@@ -17,25 +16,20 @@ export default function Home() {
         <Hero />
       </section>
 
-      {/* FROTA */}
-      <section id="frota" className="section-pad">
-        <Frota />
+      {/* FROTA (COLADA NO HERO) */}
+      <section id="frota" className="-mt-14 md: mt-5">
+        <Frota
+          showDivider={false}
+          containerClassName="pt-0"
+          headerClassName="pt-0"
+          compact
+          cardless
+        />
       </section>
 
-      {/* EMPRESA */}
-      <section id="empresa" className="section-pad">
+      {/* EMPRESA (MAIS PRÓXIMO) */}
+      <section id="empresa" className="py-0 md:py-0">
         <Empresa />
-      </section>
-
-      {/* CONTATO (✅ agora vira um BLOCO padrão, igual os outros) */}
-      <section id="contato" className="section-pad">
-        <div className="max-w-[1400px] mx-auto">
-          <div className="bg-[#0A0A0A] border border-white/5">
-            <div className="py-10 md:py-12 px-6 md:px-10">
-              <Formulario />
-            </div>
-          </div>
-        </div>
       </section>
 
       <Footer />

@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { FROTA } from "@/constants/carros";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Calculator } from "lucide-react";
 
 export default function FormularioContato() {
+  const searchParams = useSearchParams();
+
   const CONTACT = {
-    // ✅ só dígitos (DDD + número) — sem +, sem espaço, sem parênteses
     phoneE164Digits: "5582996906585",
   } as const;
 
@@ -20,9 +22,13 @@ export default function FormularioContato() {
   });
 
   const [total, setTotal] = useState<number | null>(null);
-
-  // ✅ avisos UX
   const [avisoData, setAvisoData] = useState<string>("");
+
+  // Prefill vindo do Hero (/contato?local&retirada&devolucao&lat&lng)
+  const [prefillLocal, setPrefillLocal] = useState<string>("");
+  const [prefillCoords, setPrefillCoords] = useState<{ lat?: string; lng?: string }>(
+    {}
+  );
 
   // =========================
   // Helpers de datas (sem libs)
@@ -32,7 +38,6 @@ export default function FormularioContato() {
   const toISODate = (d: Date) =>
     `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
-  // ✅ ISO (YYYY-MM-DD) -> DD/MM/YYYY
   const formatBR = (iso: string) => {
     if (!iso) return "";
     const [y, m, d] = iso.split("-");
@@ -40,7 +45,6 @@ export default function FormularioContato() {
   };
 
   const parseISODate = (iso: string) => {
-    // força meio-dia pra evitar bug de timezone (virar dia anterior)
     const [y, m, d] = iso.split("-").map(Number);
     return new Date(y, m - 1, d, 12, 0, 0);
   };
@@ -56,7 +60,6 @@ export default function FormularioContato() {
     return parseISODate(iso).getDay() === 0;
   };
 
-  // ✅ se cair no domingo, avança até segunda
   const nextNonSundayISO = (iso: string) => {
     if (!iso) return iso;
     const d = parseISODate(iso);
@@ -65,33 +68,57 @@ export default function FormularioContato() {
   };
 
   const hoje = useMemo(() => toISODate(new Date()), []);
-
-  // ✅ menor dia permitido para RETIRADA (se hoje for domingo, já começa na segunda)
   const minDataRetirada = useMemo(() => nextNonSundayISO(hoje), [hoje]);
 
-  // =========================
-  // Min devolução
-  // - baseado na retirada selecionada
-  // - sempre +1 dia
-  // - se cair no domingo, pula pra segunda
-  // =========================
   const minDataDevolucao = useMemo(() => {
     if (!form.dataRetirada) return addDaysISO(minDataRetirada, 1);
-
-    // se o user tentar setar retirada em domingo por qualquer motivo,
-    // normaliza pra próxima segunda
     const retiradaValida = nextNonSundayISO(form.dataRetirada);
-
     let min = addDaysISO(retiradaValida, 1);
     min = nextNonSundayISO(min);
-
     return min;
   }, [form.dataRetirada, minDataRetirada]);
 
   // =========================
-  // Remove domingo automaticamente (sem avisos "Domingo é fechado...")
-  // - Retirada: se escolher domingo, troca pra segunda
-  // - Devolução: se escolher domingo, troca pra segunda (e respeita mínimo)
+  // Prefill vindo do Hero (querystring)
+  // =========================
+  useEffect(() => {
+    const local = searchParams.get("local") || "";
+    const retirada = searchParams.get("retirada") || "";
+    const devolucao = searchParams.get("devolucao") || "";
+    const lat = searchParams.get("lat") || "";
+    const lng = searchParams.get("lng") || "";
+
+    if (local) setPrefillLocal(local);
+    if (lat || lng) setPrefillCoords({ lat, lng });
+
+    if (retirada) {
+      const retiradaValida = nextNonSundayISO(retirada);
+
+      setForm((prev) => ({
+        ...prev,
+        dataRetirada: retiradaValida,
+        dataDevolucao: "",
+      }));
+
+      if (devolucao) {
+        let min = addDaysISO(retiradaValida, 1);
+        min = nextNonSundayISO(min);
+
+        let devolucaoValida = nextNonSundayISO(devolucao);
+        if (devolucaoValida < min) devolucaoValida = min;
+
+        setForm((prev) => ({
+          ...prev,
+          dataRetirada: retiradaValida,
+          dataDevolucao: devolucaoValida,
+        }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // =========================
+  // Remove domingo automaticamente
   // =========================
   const onChangeRetirada = (value: string) => {
     setAvisoData("");
@@ -107,7 +134,11 @@ export default function FormularioContato() {
       setAvisoData("Domingo é fechado. Ajustamos sua retirada para a segunda-feira.");
     }
 
-    setForm((prev) => ({ ...prev, dataRetirada: retiradaValida, dataDevolucao: "" }));
+    setForm((prev) => ({
+      ...prev,
+      dataRetirada: retiradaValida,
+      dataDevolucao: "",
+    }));
   };
 
   const onChangeDevolucao = (value: string) => {
@@ -132,7 +163,6 @@ export default function FormularioContato() {
     setForm((prev) => ({ ...prev, dataDevolucao: devolucaoValida }));
   };
 
-  // ✅ limpa aviso sozinho
   useEffect(() => {
     if (!avisoData) return;
     const t = setTimeout(() => setAvisoData(""), 3500);
@@ -140,7 +170,7 @@ export default function FormularioContato() {
   }, [avisoData]);
 
   // =========================
-  // Cálculo (agora usando datas já válidas)
+  // Cálculo
   // =========================
   useEffect(() => {
     if (form.carro && form.dataRetirada && form.dataDevolucao) {
@@ -169,7 +199,6 @@ export default function FormularioContato() {
     }
   }, [form, minDataDevolucao, minDataRetirada]);
 
-  // ✅ habilita CTA só quando estiver tudo preenchido + total calculado
   const pronto = Boolean(
     form.nome.trim() &&
       form.carro &&
@@ -179,12 +208,10 @@ export default function FormularioContato() {
   );
 
   // =========================
-  // Submit -> WhatsApp (mobile + desktop)
+  // Submit -> WhatsApp
   // =========================
   const enviarFormulario = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    // fecha teclado no mobile pra evitar "primeiro toque só fecha teclado"
     (document.activeElement as HTMLElement | null)?.blur?.();
 
     if (!pronto || total === null) return;
@@ -193,34 +220,111 @@ export default function FormularioContato() {
       `Olá! Quero solicitar uma reserva na LA Locadora.`,
       ``,
       `Nome: ${form.nome}`,
+      prefillLocal ? `Local: ${prefillLocal}` : null,
       `Carro: ${form.carro}`,
       `Retirada: ${formatBR(form.dataRetirada)}`,
       `Devolução: ${formatBR(form.dataDevolucao)}`,
       `Quilometragem: ${form.quilometragem}`,
       `Estimativa (c/ lavagem): R$ ${total.toLocaleString("pt-BR")}`,
-    ].join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    const url = `https://wa.me/${CONTACT.phoneE164Digits}?text=${encodeURIComponent(msg)}`;
-
-    // iOS/Safari e mobile em geral: window.location é mais confiável que window.open
+    const url = `https://wa.me/${CONTACT.phoneE164Digits}?text=${encodeURIComponent(
+      msg
+    )}`;
     window.location.href = url;
   };
 
   return (
-    <div className="text-white font-display">
-      <div className="flex flex-col gap-10 md:gap-12">
-        {/* Topo */}
-        <div className="flex flex-col md:flex-row justify-between items-start gap-8">
-          <div className="w-full">
-            <span className="text-brand-blue font-bold text-[10px] uppercase tracking-[0.4em] mb-4 block">
-              Reserva & Orçamento
-            </span>
+    <section className="font-display">
+      {/* fundo um pouco mais “premium” e com contraste melhor */}
+      <div className="rounded-3xl border border-slate-300/70 bg-white shadow-[0_35px_110px_-85px_rgba(2,6,23,0.55)] overflow-hidden">
+        {/* HEADER DO FORM (mais contraste) */}
+        <div className="relative border-b border-slate-200 bg-slate-100 px-6 md:px-10 py-8 md:py-10">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -top-16 -right-20 h-[280px] w-[280px] rounded-full bg-brand-blue/15 blur-3xl" />
+            <div className="absolute bottom-0 left-0 h-[140px] w-[75%] bg-gradient-to-r from-white/90 via-white/40 to-transparent" />
+          </div>
 
-            <h2 className="text-5xl md:text-6xl font-black tracking-[-0.05em] leading-[0.9] uppercase italic">
-              VAMOS <br /> <span className="text-brand-blue">RESERVAR?</span>
-            </h2>
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="h-[2px] w-10 bg-brand-blue rounded-full" />
+              <span className="text-slate-600 font-black text-[10px] uppercase tracking-[0.4em]">
+                Reserva & Orçamento
+              </span>
+            </div>
 
-            {/* Aviso UX "rápido" (auto-correções) */}
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+              <div>
+                <h2 className="text-4xl md:text-5xl font-black tracking-tighter leading-[0.9] uppercase text-slate-950">
+                  Vamos <span className="text-brand-blue italic">reservar</span>
+                  <span className="text-brand-blue">.</span>
+                </h2>
+
+                <p className="mt-4 text-slate-700 text-base md:text-lg font-normal leading-relaxed max-w-2xl">
+                  Escolha o veículo, as datas e o plano de quilometragem. A gente calcula a
+                  estimativa e você finaliza pelo WhatsApp.
+                </p>
+
+                <AnimatePresence>
+                  {(form.dataRetirada || form.dataDevolucao || prefillLocal) && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                      transition={{ duration: 0.35 }}
+                      className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-2xl border border-slate-300/60 bg-white/85 px-4 py-3 text-[10px]
+                                 uppercase tracking-[0.25em] font-black text-slate-700 shadow-sm"
+                    >
+                      {prefillLocal && (
+                        <span className="rounded-full bg-slate-900/10 px-3 py-1 text-slate-800">
+                          local: {prefillLocal}
+                        </span>
+                      )}
+                      {form.dataRetirada && (
+                        <span className="rounded-full bg-brand-blue/15 text-slate-900 px-3 py-1">
+                          retirada: {formatBR(form.dataRetirada)}
+                        </span>
+                      )}
+                      {form.dataDevolucao && (
+                        <span className="rounded-full bg-brand-blue/15 text-slate-900 px-3 py-1">
+                          devolução: {formatBR(form.dataDevolucao)}
+                        </span>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <AnimatePresence>
+                {total !== null && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.35 }}
+                    className="rounded-2xl border border-slate-300/60 bg-white px-6 py-5 shadow-[0_22px_70px_-55px_rgba(2,6,23,0.45)]"
+                  >
+                    <div className="flex items-center gap-2 mb-2 text-slate-900">
+                      <Calculator size={14} className="text-brand-blue" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+                        Estimativa (c/ lavagem)
+                      </span>
+                    </div>
+
+                    <div className="text-4xl font-black tracking-tight text-slate-950">
+                      R$ {total.toLocaleString("pt-BR")}
+                    </div>
+
+                    <p className="text-[10px] text-slate-600 mt-2 uppercase tracking-widest font-bold">
+                      Taxa de lavagem inclusa
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             <AnimatePresence>
               {avisoData && (
                 <motion.div
@@ -228,176 +332,188 @@ export default function FormularioContato() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
                   transition={{ duration: 0.35 }}
-                  className="mt-4 border border-brand-blue/30 bg-brand-blue/10 px-4 py-3 text-[11px] uppercase tracking-[0.25em] font-black text-brand-blue"
+                  className="mt-6 rounded-2xl border border-amber-300/70 bg-amber-50 px-5 py-4 text-[11px]
+                             uppercase tracking-[0.25em] font-black text-amber-900"
                 >
                   {avisoData}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-          {/* Estimativa */}
-          <AnimatePresence>
-            {total !== null && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="bg-brand-blue/10 border border-brand-blue/30 p-6 min-w-[240px]"
-              >
-                <div className="flex items-center gap-2 mb-2 text-brand-blue">
-                  <Calculator size={14} />
-                  <span className="text-[10px] font-black uppercase">
-                    Estimativa (c/ Lavagem)
-                  </span>
-                </div>
-                <div className="text-4xl font-black italic">
-                  R$ {total.toLocaleString("pt-BR")}
-                </div>
-                <p className="text-[9px] text-gray-500 mt-2 uppercase tracking-tighter">
-                  *Taxa de lavagem inclusa
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
-        {/* Form */}
-        <form
-          onSubmit={enviarFormulario}
-          className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-10"
-        >
-          {/* 01 Nome */}
-          <div className="group flex flex-col gap-3 border-b border-white/10 pb-2 hover:border-brand-blue/50 transition-colors duration-500">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-bold group-hover:text-brand-blue transition-colors duration-500">
-              01. Nome
-            </label>
-            <input
-              required
-              type="text"
-              placeholder="DIGITE AQUI"
-              value={form.nome}
-              className="bg-transparent text-xl font-black uppercase outline-none placeholder:text-white/5"
-              onChange={(e) => setForm({ ...form, nome: e.target.value })}
-            />
-          </div>
-
-          {/* 02 Veículo */}
-          <div className="group flex flex-col gap-3 border-b border-white/10 pb-2 hover:border-brand-blue/50 transition-colors duration-500">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-bold group-hover:text-brand-blue transition-colors duration-500">
-              02. Veículo
-            </label>
-            <select
-              required
-              value={form.carro}
-              className="bg-transparent text-xl font-black uppercase outline-none cursor-pointer"
-              onChange={(e) => setForm({ ...form, carro: e.target.value })}
-            >
-              <option value="" className="bg-brand-dark">
-                SELECIONAR
-              </option>
-              {FROTA.map((c) => (
-                <option key={c.id} value={c.nome} className="bg-brand-dark">
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 03 Retirada */}
-          <div className="group flex flex-col gap-3 border-b border-white/10 pb-2 hover:border-brand-blue/50 transition-colors duration-500">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-bold group-hover:text-brand-blue transition-colors duration-500">
-              03. Retirada
-            </label>
-            <input
-              required
-              type="date"
-              min={minDataRetirada}
-              value={form.dataRetirada}
-              className="bg-transparent text-xl font-black uppercase outline-none [color-scheme:dark]"
-              onChange={(e) => onChangeRetirada(e.target.value)}
-            />
-            <p className="text-[10px] uppercase tracking-[0.25em] text-white/20">
-              Domingos não aparecem como opção.
-            </p>
-          </div>
-
-          {/* 04 Devolução */}
-          <div className="group flex flex-col gap-3 border-b border-white/10 pb-2 hover:border-brand-blue/50 transition-colors duration-500">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-bold group-hover:text-brand-blue transition-colors duration-500">
-              04. Devolução
-            </label>
-            <input
-              required
-              type="date"
-              min={minDataDevolucao}
-              value={form.dataDevolucao}
-              disabled={!form.dataRetirada}
-              className="bg-transparent text-xl font-black uppercase outline-none [color-scheme:dark] disabled:opacity-20"
-              onChange={(e) => onChangeDevolucao(e.target.value)}
-            />
-
-            {form.dataRetirada ? (
-              <p className="text-[10px] uppercase tracking-[0.25em] text-white/20">
-                mínima: {formatBR(minDataDevolucao)}
-              </p>
-            ) : (
-              <p className="text-[10px] uppercase tracking-[0.25em] text-white/20">
-                Selecione a retirada primeiro.
-              </p>
-            )}
-          </div>
-
-          {/* 05 - Quilometragem */}
-          <div className="md:col-span-2 space-y-4">
-            <label className="text-[9px] uppercase tracking-[0.3em] text-gray-500 font-bold">
-              05. Quilometragem
-            </label>
-            <div className="flex gap-8">
-              {["300km", "Km Livre"].map((km) => (
-                <label key={km} className="group flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="km_contato"
-                    value={km}
-                    checked={form.quilometragem === km}
-                    onChange={(e) => setForm({ ...form, quilometragem: e.target.value })}
-                    className="accent-brand-blue"
-                  />
-                  <span
-                    className={`text-lg font-black uppercase transition-colors duration-500 ${
-                      form.quilometragem === km
-                        ? "text-brand-blue"
-                        : "text-white/20 group-hover:text-white/50"
-                    }`}
-                  >
-                    {km}
-                  </span>
-                </label>
-              ))}
+        {/* FORM BODY */}
+        <div className="px-6 md:px-10 py-8 md:py-10 bg-white">
+          <form
+            onSubmit={enviarFormulario}
+            className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8"
+          >
+            {/* 01 Nome */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                01. Nome
+              </label>
+              <input
+                required
+                type="text"
+                placeholder="Digite seu nome"
+                value={form.nome}
+                onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-950 font-black uppercase outline-none
+                           placeholder:text-slate-500/70
+                           focus:border-brand-blue/60 focus:ring-4 focus:ring-brand-blue/15 transition"
+              />
             </div>
-          </div>
 
-          {/* CTA */}
-          <div className="md:col-span-2 flex justify-end pt-4">
-            <button
-              type="submit"
-              disabled={!pronto}
-              className="group flex items-center gap-6 text-white transition-all duration-500 ease-out hover:translate-x-3 active:scale-[0.97] active:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:translate-x-0 cursor-pointer md:cursor-pointer"
-            >
-              <span className="text-3xl md:text-4xl font-black uppercase group-hover:text-brand-blue transition-colors duration-500">
-                SOLICITAR AGORA
-              </span>
-              <div className="w-14 h-14 rounded-full border border-white/20 flex items-center justify-center group-hover:bg-brand-blue group-hover:border-brand-blue transition-all duration-500">
-                <ArrowRight
-                  size={24}
-                  className="group-hover:translate-x-1 transition-transform duration-500"
-                />
+            {/* 02 Veículo */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                02. Veículo
+              </label>
+              <select
+                required
+                value={form.carro}
+                onChange={(e) => setForm({ ...form, carro: e.target.value })}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-950 font-black uppercase outline-none cursor-pointer
+                           focus:border-brand-blue/60 focus:ring-4 focus:ring-brand-blue/15 transition"
+              >
+                <option value="">Selecionar</option>
+                {FROTA.map((c) => (
+                  <option key={c.id} value={c.nome}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 03 Retirada */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                03. Retirada
+              </label>
+              <input
+                required
+                type="date"
+                min={minDataRetirada}
+                value={form.dataRetirada}
+                onChange={(e) => onChangeRetirada(e.target.value)}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-950 font-black uppercase outline-none [color-scheme:light]
+                           focus:border-brand-blue/60 focus:ring-4 focus:ring-brand-blue/15 transition"
+              />
+              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                Domingos não aparecem como opção.
+              </p>
+            </div>
+
+            {/* 04 Devolução */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                04. Devolução
+              </label>
+              <input
+                required
+                type="date"
+                min={minDataDevolucao}
+                value={form.dataDevolucao}
+                disabled={!form.dataRetirada}
+                onChange={(e) => onChangeDevolucao(e.target.value)}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-950 font-black uppercase outline-none [color-scheme:light]
+                           disabled:opacity-40 disabled:cursor-not-allowed
+                           focus:border-brand-blue/60 focus:ring-4 focus:ring-brand-blue/15 transition"
+              />
+              {form.dataRetirada ? (
+                <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                  mínima: {formatBR(minDataDevolucao)}
+                </p>
+              ) : (
+                <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                  Selecione a retirada primeiro.
+                </p>
+              )}
+            </div>
+
+            {/* 05 Quilometragem */}
+            <div className="md:col-span-2 space-y-3">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                05. Quilometragem
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {["300km", "Km Livre"].map((km) => {
+                  const active = form.quilometragem === km;
+                  return (
+                    <label
+                      key={km}
+                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-4 cursor-pointer transition
+                        ${
+                          active
+                            ? "border-brand-blue/60 bg-brand-blue/15"
+                            : "border-slate-300/70 bg-slate-100 hover:border-brand-blue/50"
+                        }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="km_contato"
+                          value={km}
+                          checked={active}
+                          onChange={(e) =>
+                            setForm({ ...form, quilometragem: e.target.value })
+                          }
+                          className="accent-brand-blue"
+                        />
+                        <span
+                          className={`text-sm md:text-base font-black uppercase tracking-widest ${
+                            active ? "text-slate-950" : "text-slate-800"
+                          }`}
+                        >
+                          {km}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] uppercase tracking-[0.25em] font-black text-slate-600">
+                        plano
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
-            </button>
-          </div>
-        </form>
+
+              <p className="text-[11px] text-slate-700 font-normal leading-relaxed">
+                *A estimativa considera o número de diárias + taxa de lavagem (R$ 50).
+              </p>
+            </div>
+
+            {/* CTA */}
+            <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+              <div className="text-slate-700 text-sm font-normal">
+                Ao enviar, você será redirecionado para o WhatsApp para confirmar a reserva.
+              </div>
+
+              <button
+                type="submit"
+                disabled={!pronto}
+                className="group inline-flex items-center justify-center gap-3 rounded-full px-7 py-4
+                           bg-slate-950 text-white text-[11px] font-black uppercase tracking-[0.25em]
+                           hover:bg-brand-blue hover:text-slate-950 transition-all
+                           disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-slate-950/15"
+              >
+                Solicitar agora
+                <span className="grid place-items-center h-9 w-9 rounded-full bg-white/10 group-hover:bg-slate-950/10 transition">
+                  <ArrowRight
+                    size={18}
+                    className="group-hover:translate-x-0.5 transition-transform"
+                  />
+                </span>
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
