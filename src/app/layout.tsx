@@ -21,7 +21,7 @@ const syne = Syne({
 export const metadata: Metadata = {
   // ✅ IMPORTANTE: troque pelo seu domínio real em produção
   // Ex.: https://lalocadora.com.br
-  metadataBase: new URL("https://lalocadora.netlify.app"),
+  metadataBase: new URL("https://lalocadorawhite.netlify.app"),
 
   title: {
     default: "L.A. LOCADORA | Experiência Premium em Locação",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     title: "L.A. LOCADORA | Experiência Premium em Locação",
     description:
       "Elevando o padrão de locação de veículos exclusivos. Conforto, agilidade e segurança em cada quilômetro.",
-    url: "https://lalocadora.netlify.app",
+    url: "https://lalocadorawhite.netlify.app",
     siteName: "L.A. Locadora",
     locale: "pt_BR",
     type: "website",
