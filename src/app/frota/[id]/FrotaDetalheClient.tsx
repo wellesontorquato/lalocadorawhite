@@ -6,7 +6,7 @@ import { FROTA, Carro, CarFeatureId } from "@/constants/carros";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   ChevronLeft,
@@ -24,7 +24,6 @@ import {
 
 function FeatureIcon({ id }: { id: CarFeatureId }) {
   const common = "text-brand-blue";
-
   switch (id) {
     case "ar":
       return <Wind size={18} className={common} />;
@@ -53,17 +52,16 @@ function formatDateBR(iso?: string | null) {
   return `${d}/${m}/${y}`;
 }
 
-export default function FrotaDetalheClient({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function FrotaDetalheClient() {
+  const routeParams = useParams<{ id?: string }>();
+  const routeId = routeParams?.id; // <- AGORA funciona no client
+
   const searchParams = useSearchParams();
   const retirada = searchParams.get("retirada");
   const devolucao = searchParams.get("devolucao");
 
   const carro: Carro | undefined = useMemo(() => {
-    const raw = decodeURIComponent(params?.id ?? "");
+    const raw = decodeURIComponent(String(routeId ?? ""));
     const target = raw.trim().toLowerCase();
 
     const slug = (s: string) =>
@@ -75,15 +73,12 @@ export default function FrotaDetalheClient({
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
 
-    // 1) id exato (normalizado)
     const byId = FROTA.find((c) => String(c.id).trim().toLowerCase() === target);
     if (byId) return byId;
 
-    // 2) slug do nome exato (ex: "Onix 2022" -> "onix-2022")
     const byNameSlug = FROTA.find((c) => slug(c.nome) === target);
     if (byNameSlug) return byNameSlug;
 
-    // 3) slug do nome contido no target (ex: "onix-2022-chevrolet")
     const byNameSlugPartial = FROTA.find((c) => {
       const s = slug(c.nome);
       return (
@@ -95,21 +90,18 @@ export default function FrotaDetalheClient({
     });
     if (byNameSlugPartial) return byNameSlugPartial;
 
-    // 4) fallback: nome normalizado sem slug
     const byNamePlain = FROTA.find((c) => c.nome.trim().toLowerCase() === target);
     if (byNamePlain) return byNamePlain;
 
     return undefined;
-  }, [params?.id]);
+  }, [routeId]);
 
   const contatoHref = useMemo(() => {
     if (!carro) return "/contato";
-
     const qp = new URLSearchParams();
     qp.set("carro", carro.nome);
     if (retirada) qp.set("retirada", retirada);
     if (devolucao) qp.set("devolucao", devolucao);
-
     return `/contato?${qp.toString()}`;
   }, [carro, retirada, devolucao]);
 
@@ -132,32 +124,17 @@ export default function FrotaDetalheClient({
               Esse veículo não existe na base da frota.
             </p>
 
-            {/* ✅ DEBUG VISÍVEL (remover depois) */}
+            {/* DEBUG (pode remover depois) */}
             <div className="mt-4 rounded-2xl bg-white border border-slate-200 p-4 text-xs text-slate-700">
-              <p>
-                <b>debug params.id:</b> {String(params?.id)}
-              </p>
-              <p>
-                <b>debug decoded:</b>{" "}
-                {decodeURIComponent(String(params?.id ?? ""))}
-              </p>
-
+              <p><b>debug routeId (useParams):</b> {String(routeId)}</p>
+              <p><b>decoded:</b> {decodeURIComponent(String(routeId ?? ""))}</p>
               <div className="mt-2">
-                <p>
-                  <b>debug frota ids:</b>
-                </p>
-                <p className="break-words">
-                  {FROTA.map((c) => c.id).join(", ")}
-                </p>
+                <p><b>frota ids:</b></p>
+                <p className="break-words">{FROTA.map((c) => c.id).join(", ")}</p>
               </div>
-
               <div className="mt-2">
-                <p>
-                  <b>debug frota nomes:</b>
-                </p>
-                <p className="break-words">
-                  {FROTA.map((c) => c.nome).join(" | ")}
-                </p>
+                <p><b>frota nomes:</b></p>
+                <p className="break-words">{FROTA.map((c) => c.nome).join(" | ")}</p>
               </div>
             </div>
 
@@ -177,11 +154,11 @@ export default function FrotaDetalheClient({
     );
   }
 
+  // ---- resto do seu layout (inalterado) ----
   return (
     <main className="min-h-screen bg-white text-slate-900 font-display overflow-x-hidden">
       <NavbarPages />
 
-      {/* HERO */}
       <section className="relative bg-slate-50 border-b border-slate-200/60 overflow-hidden">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 -right-24 h-[320px] w-[320px] rounded-full bg-brand-blue/10 blur-3xl" />
@@ -221,19 +198,13 @@ export default function FrotaDetalheClient({
             transition={{ duration: 0.7, ease: "easeOut" }}
             className="mt-6 grid grid-cols-1 lg:grid-cols-[1.15fr_.85fr] gap-8"
           >
-            {/* IMAGEM */}
             <div className="rounded-3xl border border-slate-200 bg-white overflow-hidden shadow-[0_24px_80px_-60px_rgba(2,6,23,0.35)]">
               <div className="relative aspect-[16/10] bg-slate-100 overflow-hidden">
-                <img
-                  src={carro.imagem}
-                  alt={carro.nome}
-                  className="w-full h-full object-cover"
-                />
+                <img src={carro.imagem} alt={carro.nome} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent opacity-90" />
               </div>
             </div>
 
-            {/* CONTEÚDO */}
             <div className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8 shadow-[0_24px_80px_-60px_rgba(2,6,23,0.35)]">
               <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.4em]">
                 Detalhes do veículo
@@ -261,21 +232,13 @@ export default function FrotaDetalheClient({
 
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="rounded-xl bg-white border border-slate-200 p-3">
-                      <p className="text-[10px] uppercase tracking-widest font-black text-slate-500">
-                        Retirada
-                      </p>
-                      <p className="mt-1 text-lg font-black">
-                        {formatDateBR(retirada)}
-                      </p>
+                      <p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Retirada</p>
+                      <p className="mt-1 text-lg font-black">{formatDateBR(retirada)}</p>
                     </div>
 
                     <div className="rounded-xl bg-white border border-slate-200 p-3">
-                      <p className="text-[10px] uppercase tracking-widest font-black text-slate-500">
-                        Devolução
-                      </p>
-                      <p className="mt-1 text-lg font-black">
-                        {formatDateBR(devolucao)}
-                      </p>
+                      <p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Devolução</p>
+                      <p className="mt-1 text-lg font-black">{formatDateBR(devolucao)}</p>
                     </div>
                   </div>
                 </div>
@@ -300,9 +263,7 @@ export default function FrotaDetalheClient({
 
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                    Diária até 300km
-                  </p>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Diária até 300km</p>
                   <p className="mt-1 text-3xl font-black">
                     <span className="text-brand-blue text-sm mr-1 italic">R$</span>
                     {carro.preco300km}
@@ -310,9 +271,7 @@ export default function FrotaDetalheClient({
                 </div>
 
                 <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                    Diária km livre
-                  </p>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Diária km livre</p>
                   <p className="mt-1 text-3xl font-black">
                     <span className="text-brand-blue text-sm mr-1 italic">R$</span>
                     {carro.precoKmLivre}
@@ -333,7 +292,6 @@ export default function FrotaDetalheClient({
         </div>
       </section>
 
-      {/* FEATURES */}
       <section className="py-10">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12">
           <div className="flex items-center gap-3 mb-6">
@@ -358,9 +316,7 @@ export default function FrotaDetalheClient({
               ))}
             </div>
           ) : (
-            <p className="text-slate-500">
-              *Este veículo não possui itens cadastrados.
-            </p>
+            <p className="text-slate-500">*Este veículo não possui itens cadastrados.</p>
           )}
         </div>
       </section>
