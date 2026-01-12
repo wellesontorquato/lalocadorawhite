@@ -64,11 +64,42 @@ export default function FrotaDetalheClient({
 
     const carro: Carro | undefined = useMemo(() => {
     const raw = decodeURIComponent(params?.id ?? "");
-    const id = raw.trim().toLowerCase();
+    const target = raw.trim().toLowerCase();
 
-    return FROTA.find((c) => String(c.id).trim().toLowerCase() === id);
+    const slug = (s: string) =>
+        s
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+
+    // 1) id exato (normalizado)
+    const byId = FROTA.find(
+        (c) => String(c.id).trim().toLowerCase() === target
+    );
+    if (byId) return byId;
+
+    // 2) slug do nome exato (ex: "Onix 2022" -> "onix-2022")
+    const byNameSlug = FROTA.find((c) => slug(c.nome) === target);
+    if (byNameSlug) return byNameSlug;
+
+    // 3) slug do nome contido no target (ex: "onix-2022-chevrolet")
+    const byNameSlugPartial = FROTA.find((c) => {
+        const s = slug(c.nome);
+        return target === s || target.startsWith(`${s}-`) || target.includes(`-${s}-`) || target.endsWith(`-${s}`);
+    });
+    if (byNameSlugPartial) return byNameSlugPartial;
+
+    // 4) fallback: nome normalizado sem slug
+    const byNamePlain = FROTA.find(
+        (c) => c.nome.trim().toLowerCase() === target
+    );
+    if (byNamePlain) return byNamePlain;
+
+    return undefined;
     }, [params?.id]);
-
 
   const contatoHref = useMemo(() => {
     if (!carro) return "/contato";
