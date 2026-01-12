@@ -62,10 +62,13 @@ export default function FrotaDetalheClient({
   const retirada = searchParams.get("retirada");
   const devolucao = searchParams.get("devolucao");
 
-  const carro: Carro | undefined = useMemo(() => {
-    const id = decodeURIComponent(params.id);
-    return FROTA.find((c) => String(c.id) === String(id));
-  }, [params.id]);
+    const carro: Carro | undefined = useMemo(() => {
+    const raw = decodeURIComponent(params?.id ?? "");
+    const id = raw.trim().toLowerCase();
+
+    return FROTA.find((c) => String(c.id).trim().toLowerCase() === id);
+    }, [params?.id]);
+
 
   const contatoHref = useMemo(() => {
     if (!carro) return "/contato";
