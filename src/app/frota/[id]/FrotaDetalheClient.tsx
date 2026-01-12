@@ -62,12 +62,12 @@ export default function FrotaDetalheClient({
   const retirada = searchParams.get("retirada");
   const devolucao = searchParams.get("devolucao");
 
-    const carro: Carro | undefined = useMemo(() => {
+  const carro: Carro | undefined = useMemo(() => {
     const raw = decodeURIComponent(params?.id ?? "");
     const target = raw.trim().toLowerCase();
 
     const slug = (s: string) =>
-        s
+      s
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
@@ -76,9 +76,7 @@ export default function FrotaDetalheClient({
         .replace(/(^-|-$)/g, "");
 
     // 1) id exato (normalizado)
-    const byId = FROTA.find(
-        (c) => String(c.id).trim().toLowerCase() === target
-    );
+    const byId = FROTA.find((c) => String(c.id).trim().toLowerCase() === target);
     if (byId) return byId;
 
     // 2) slug do nome exato (ex: "Onix 2022" -> "onix-2022")
@@ -87,19 +85,22 @@ export default function FrotaDetalheClient({
 
     // 3) slug do nome contido no target (ex: "onix-2022-chevrolet")
     const byNameSlugPartial = FROTA.find((c) => {
-        const s = slug(c.nome);
-        return target === s || target.startsWith(`${s}-`) || target.includes(`-${s}-`) || target.endsWith(`-${s}`);
+      const s = slug(c.nome);
+      return (
+        target === s ||
+        target.startsWith(`${s}-`) ||
+        target.includes(`-${s}-`) ||
+        target.endsWith(`-${s}`)
+      );
     });
     if (byNameSlugPartial) return byNameSlugPartial;
 
     // 4) fallback: nome normalizado sem slug
-    const byNamePlain = FROTA.find(
-        (c) => c.nome.trim().toLowerCase() === target
-    );
+    const byNamePlain = FROTA.find((c) => c.nome.trim().toLowerCase() === target);
     if (byNamePlain) return byNamePlain;
 
     return undefined;
-    }, [params?.id]);
+  }, [params?.id]);
 
   const contatoHref = useMemo(() => {
     if (!carro) return "/contato";
@@ -130,6 +131,35 @@ export default function FrotaDetalheClient({
             <p className="mt-2 text-slate-600">
               Esse veículo não existe na base da frota.
             </p>
+
+            {/* ✅ DEBUG VISÍVEL (remover depois) */}
+            <div className="mt-4 rounded-2xl bg-white border border-slate-200 p-4 text-xs text-slate-700">
+              <p>
+                <b>debug params.id:</b> {String(params?.id)}
+              </p>
+              <p>
+                <b>debug decoded:</b>{" "}
+                {decodeURIComponent(String(params?.id ?? ""))}
+              </p>
+
+              <div className="mt-2">
+                <p>
+                  <b>debug frota ids:</b>
+                </p>
+                <p className="break-words">
+                  {FROTA.map((c) => c.id).join(", ")}
+                </p>
+              </div>
+
+              <div className="mt-2">
+                <p>
+                  <b>debug frota nomes:</b>
+                </p>
+                <p className="break-words">
+                  {FROTA.map((c) => c.nome).join(" | ")}
+                </p>
+              </div>
+            </div>
 
             <Link
               href="/frota"
