@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import {
   ArrowUpRight,
   Wind,
-  SteeringWheel,
+  Car,
   GlassWater,
   LockKeyhole,
   ShieldCheck,
@@ -19,22 +19,30 @@ import {
 
 function FeatureIcon({ id }: { id: CarFeatureId }) {
   const common = "text-brand-blue";
+
   switch (id) {
     case "ar":
       return <Wind size={18} className={common} />;
+
     case "direcao":
-      return <SteeringWheel size={18} className={common} />;
+      return <Car size={18} className={common} />;
+
     case "vidro":
       return <GlassWater size={18} className={common} />;
+
     case "trava":
       return <LockKeyhole size={18} className={common} />;
+
     case "abs":
       return <ShieldCheck size={18} className={common} />;
+
     case "bagagem_grande":
     case "bagagem_pequena":
       return <Luggage size={18} className={common} />;
+
     case "pessoas":
       return <Users size={18} className={common} />;
+
     default:
       return <ShieldCheck size={18} className={common} />;
   }
