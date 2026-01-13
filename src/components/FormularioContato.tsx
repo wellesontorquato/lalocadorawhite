@@ -23,14 +23,14 @@ export default function FormularioContato() {
     quilometragem: "300km",
   });
 
-  // NOVO: arquivos CPF/CNH
+  // arquivos CPF/CNH
   const [cpfFile, setCpfFile] = useState<File | null>(null);
   const [cnhFile, setCnhFile] = useState<File | null>(null);
 
   const [total, setTotal] = useState<number | null>(null);
   const [avisoData, setAvisoData] = useState<string>("");
 
-  // NOVO: estados de envio
+  // estados de envio
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string>("");
 
@@ -211,6 +211,7 @@ export default function FormularioContato() {
     }
   }, [form, minDataDevolucao, minDataRetirada]);
 
+  // ✅ obrigatório de verdade: pronto só fica true se cpf/cnh existirem
   const pronto = Boolean(
     form.nome.trim() &&
       form.carro &&
@@ -224,18 +225,14 @@ export default function FormularioContato() {
   // =========================
   // Upload helpers
   // =========================
-  const allowedTypes = new Set([
-    "image/png",
-    "image/jpeg",
-    "application/pdf",
-  ]);
+  const allowedTypes = new Set(["image/png", "image/jpeg", "application/pdf"]);
 
   const validateFile = (file: File | null, label: string) => {
     if (!file) return `${label} é obrigatório.`;
     if (!allowedTypes.has(file.type)) {
       return `${label}: formato inválido. Envie PNG, JPG, JPEG ou PDF.`;
     }
-    const maxMB = 8; // ajuste se quiser
+    const maxMB = 8;
     const maxBytes = maxMB * 1024 * 1024;
     if (file.size > maxBytes) {
       return `${label}: arquivo muito grande (máx. ${maxMB}MB).`;
@@ -248,7 +245,6 @@ export default function FormularioContato() {
     fd.append("file", file);
     fd.append("docType", docType);
 
-    // opcional: manda info extra p/ compor o key
     fd.append("nome", form.nome || "");
     fd.append("carro", form.carro || "");
     fd.append("retirada", form.dataRetirada || "");
@@ -270,7 +266,7 @@ export default function FormularioContato() {
   };
 
   // =========================
-  // Submit -> WhatsApp (com upload antes)
+  // Submit -> WhatsApp
   // =========================
   const enviarFormulario = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -279,7 +275,6 @@ export default function FormularioContato() {
 
     if (!pronto || total === null || !cpfFile || !cnhFile) return;
 
-    // validação final
     const errCpf = validateFile(cpfFile, "CPF");
     const errCnh = validateFile(cnhFile, "CNH");
     const err = errCpf || errCnh;
@@ -291,13 +286,11 @@ export default function FormularioContato() {
     try {
       setSending(true);
 
-      // 1) upload cpf + cnh
       const [cpfUp, cnhUp] = await Promise.all([
         uploadOne(cpfFile, "cpf"),
         uploadOne(cnhFile, "cnh"),
       ]);
 
-      // 2) monta msg com links
       const msg = [
         `Olá! Quero solicitar uma reserva na LA Locadora.`,
         ``,
@@ -530,10 +523,64 @@ export default function FormularioContato() {
               )}
             </div>
 
-            {/* 05 Quilometragem */}
+            {/* 05 CPF (upload) - AGORA ANTES DA QUILOMETRAGEM */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                05. CPF (PNG/JPG/PDF)
+              </label>
+
+              <input
+                required
+                type="file"
+                accept=".png,.jpg,.jpeg,.pdf"
+                onChange={(e) => {
+                  setSendError("");
+                  const f = e.target.files?.[0] || null;
+                  setCpfFile(f);
+                }}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-900 font-bold outline-none
+                           file:mr-4 file:rounded-full file:border-0
+                           file:bg-slate-950 file:px-4 file:py-2 file:text-[10px]
+                           file:font-black file:uppercase file:tracking-[0.25em] file:text-white
+                           hover:file:bg-brand-blue hover:file:text-slate-950 transition"
+              />
+              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                {cpfFile ? `Selecionado: ${cpfFile.name}` : "Envie foto ou PDF do CPF."}
+              </p>
+            </div>
+
+            {/* 06 CNH (upload) - AGORA ANTES DA QUILOMETRAGEM */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                06. CNH (PNG/JPG/PDF)
+              </label>
+
+              <input
+                required
+                type="file"
+                accept=".png,.jpg,.jpeg,.pdf"
+                onChange={(e) => {
+                  setSendError("");
+                  const f = e.target.files?.[0] || null;
+                  setCnhFile(f);
+                }}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-900 font-bold outline-none
+                           file:mr-4 file:rounded-full file:border-0
+                           file:bg-slate-950 file:px-4 file:py-2 file:text-[10px]
+                           file:font-black file:uppercase file:tracking-[0.25em] file:text-white
+                           hover:file:bg-brand-blue hover:file:text-slate-950 transition"
+              />
+              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                {cnhFile ? `Selecionado: ${cnhFile.name}` : "Envie foto ou PDF da CNH."}
+              </p>
+            </div>
+
+            {/* 07 Quilometragem (AGORA DEPOIS DOS DOCUMENTOS) */}
             <div className="md:col-span-2 space-y-3">
               <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
-                05. Quilometragem
+                07. Quilometragem
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -579,60 +626,6 @@ export default function FormularioContato() {
 
               <p className="text-[11px] text-slate-700 font-normal leading-relaxed">
                 *A estimativa considera o número de diárias + taxa de lavagem (R$ 50).
-              </p>
-            </div>
-
-            {/* 06 CPF (upload) */}
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
-                06. CPF (PNG/JPG/PDF)
-              </label>
-
-              <input
-                required
-                type="file"
-                accept=".png,.jpg,.jpeg,.pdf"
-                onChange={(e) => {
-                  setSendError("");
-                  const f = e.target.files?.[0] || null;
-                  setCpfFile(f);
-                }}
-                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
-                           text-slate-900 font-bold outline-none
-                           file:mr-4 file:rounded-full file:border-0
-                           file:bg-slate-950 file:px-4 file:py-2 file:text-[10px]
-                           file:font-black file:uppercase file:tracking-[0.25em] file:text-white
-                           hover:file:bg-brand-blue hover:file:text-slate-950 transition"
-              />
-              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
-                {cpfFile ? `Selecionado: ${cpfFile.name}` : "Envie foto ou PDF do CPF."}
-              </p>
-            </div>
-
-            {/* 07 CNH (upload) */}
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
-                07. CNH (PNG/JPG/PDF)
-              </label>
-
-              <input
-                required
-                type="file"
-                accept=".png,.jpg,.jpeg,.pdf"
-                onChange={(e) => {
-                  setSendError("");
-                  const f = e.target.files?.[0] || null;
-                  setCnhFile(f);
-                }}
-                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
-                           text-slate-900 font-bold outline-none
-                           file:mr-4 file:rounded-full file:border-0
-                           file:bg-slate-950 file:px-4 file:py-2 file:text-[10px]
-                           file:font-black file:uppercase file:tracking-[0.25em] file:text-white
-                           hover:file:bg-brand-blue hover:file:text-slate-950 transition"
-              />
-              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
-                {cnhFile ? `Selecionado: ${cnhFile.name}` : "Envie foto ou PDF da CNH."}
               </p>
             </div>
 
