@@ -299,23 +299,22 @@ export default function FormularioContato() {
       ]);
 
       const msg = [
-        `Olá! Quero solicitar uma reserva na LA Locadora.`,
-        ``,
-        `Nome: ${form.nome}`,
-        prefillLocal ? `Local: ${prefillLocal}` : null,
-        `Carro: ${form.carro}`,
-        `Retirada: ${formatBR(form.dataRetirada)}`,
-        `Devolução: ${formatBR(form.dataDevolucao)}`,
-        `Quilometragem: ${form.quilometragem}`,
-        `Estimativa (c/ lavagem): R$ ${total.toLocaleString("pt-BR")}`,
-        ``,
-        `Documentos (links):`,
-        `CPF: ${cpfUp.shortUrl || cpfUp.url}`,
-        `CNH: ${cnhUp.shortUrl || cnhUp.url}`,
-      ]
-        .filter(Boolean)
-        .join("\n");
-
+      `Olá! Quero solicitar uma reserva na LA Locadora.`,
+      ``,
+      `Nome: ${form.nome.toUpperCase()}`,
+      prefillLocal ? `Local: ${prefillLocal}` : null,
+      `Carro: ${form.carro}`,
+      `Retirada: ${formatBR(form.dataRetirada)}`,
+      `Devolução: ${formatBR(form.dataDevolucao)}`,
+      `Quilometragem: ${form.quilometragem}`,
+      `Estimativa (c/ lavagem): R$ ${total.toLocaleString("pt-BR")}`,
+      ``,
+      `Documentos (links):`,
+      `CPF: ${cpfUp.shortUrl || cpfUp.url}`,
+      `CNH: ${cnhUp.shortUrl || cnhUp.url}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
       const url = `https://wa.me/${CONTACT.phoneE164Digits}?text=${encodeURIComponent(
         msg

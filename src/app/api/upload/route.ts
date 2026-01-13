@@ -22,6 +22,7 @@ const boolEnv = (name: string, fallback = false) => {
   return v === "true" || v === "1" || v === "yes";
 };
 
+// Mantém só caracteres seguros e limita tamanho
 const sanitize = (s: string) =>
   (s || "")
     .normalize("NFD")
@@ -30,6 +31,9 @@ const sanitize = (s: string) =>
     .trim()
     .replace(/\s+/g, "-")
     .slice(0, 60);
+
+// Igual ao sanitize, mas garante padrão em MAIÚSCULO
+const sanitizeUpper = (s: string) => sanitize(s).toUpperCase();
 
 const extFromType = (type: string) => {
   if (type === "image/png") return "png";
@@ -73,12 +77,10 @@ async function shortCodeExists(s3: S3Client, bucket: string, code: string) {
     );
     return true;
   } catch (err: any) {
-    // se não existe, o S3 responde 404/NotFound
     const name = err?.name || "";
     const codeName = err?.Code || "";
     const status = err?.$metadata?.httpStatusCode;
     if (status === 404 || name === "NotFound" || codeName === "NotFound") return false;
-    // outros erros: rethrow
     throw err;
   }
 }
@@ -89,13 +91,26 @@ async function generateUniqueCode(s3: S3Client, bucket: string, len = 8, tries =
     const exists = await shortCodeExists(s3, bucket, code);
     if (!exists) return code;
   }
-  // fallback mais longo se bater colisão demais
   for (let i = 0; i < tries; i++) {
     const code = randomCode(Math.max(len + 2, 10));
     const exists = await shortCodeExists(s3, bucket, code);
     if (!exists) return code;
   }
   throw new Error("Falha ao gerar código curto (colisão). Tente novamente.");
+}
+
+// Monta um filename amigável: CPF-WELLESON-BEZERRA-TORQUATO-2026-01-13.png
+function buildDownloadFilename(opts: {
+  safeDoc: "cpf" | "cnh" | "doc";
+  nome: string;
+  date: string; // YYYY-MM-DD
+  ext: string;
+}) {
+  const doc = opts.safeDoc.toUpperCase(); // CPF/CNH/DOC
+  const person = sanitizeUpper(opts.nome) || "CLIENTE";
+  // limite adicional para evitar nome gigante
+  const personCut = person.slice(0, 60);
+  return `${doc}-${personCut}-${opts.date}.${opts.ext}`;
 }
 
 export async function POST(req: Request) {
@@ -124,14 +139,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const nome = sanitize(String(form.get("nome") || ""));
-    const carro = sanitize(String(form.get("carro") || ""));
+    const nomeRaw = String(form.get("nome") || "");
+    const carroRaw = String(form.get("carro") || "");
+
+    const nome = sanitize(nomeRaw);
+    const carro = sanitize(carroRaw);
 
     const ext = extFromType(file.type);
     const id = crypto.randomUUID();
     const date = new Date().toISOString().slice(0, 10);
 
-    const safeDoc = docTypeRaw === "cpf" || docTypeRaw === "cnh" ? docTypeRaw : "doc";
+    const safeDoc: "cpf" | "cnh" | "doc" =
+      docTypeRaw === "cpf" || docTypeRaw === "cnh" ? (docTypeRaw as any) : "doc";
 
     const key =
       `reservas/${date}/` +
@@ -151,25 +170,33 @@ export async function POST(req: Request) {
         Key: key,
         Body: buffer,
         ContentType: file.type,
+        // pode deixar inline aqui; o download será forçado no GET via presign
         ContentDisposition: "inline",
       })
     );
 
-    // 2) Presigned URL (GET)
-    const expiresIn = Number(process.env.S3_PRESIGN_EXPIRES || 60 * 60 * 24 * 7); // default 7 dias
+    // 2) Presigned URL (GET) com download forçado e filename amigável
+    const expiresIn = Number(process.env.S3_PRESIGN_EXPIRES || 60 * 60 * 24 * 7);
+
+    const downloadName = buildDownloadFilename({
+      safeDoc,
+      nome: nomeRaw,
+      date,
+      ext,
+    });
 
     const signedUrl = await getSignedUrl(
       s3,
       new GetObjectCommand({
         Bucket: bucket,
         Key: key,
-        ResponseContentDisposition: "inline",
+        ResponseContentDisposition: `attachment; filename="${downloadName}"`,
         ResponseContentType: file.type,
       }),
       { expiresIn }
     );
 
-    // 3) Link curto (salva mapping no próprio bucket)
+    // 3) Link curto
     const code = await generateUniqueCode(s3, bucket, Number(process.env.SHORT_CODE_LEN || 8));
     const shortKey = `short/${code}.json`;
     const expAt = Date.now() + expiresIn * 1000;
@@ -190,10 +217,11 @@ export async function POST(req: Request) {
     return NextResponse.json({
       key,
       url: signedUrl,
-      shortUrl, // ✅ use esse no WhatsApp (bem menor)
+      shortUrl,
       code,
       expiresIn,
       expAt,
+      downloadName, // só para debug/visualização
     });
   } catch (err: any) {
     console.error("[api/upload] ERROR:", err);
