@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,12 +43,6 @@ const getS3 = () => {
       secretAccessKey: required("S3_SECRET_ACCESS_KEY"),
     },
   });
-};
-
-const buildPublicUrl = (key: string) => {
-  const base = required("S3_PUBLIC_URL").replace(/\/$/, "");
-  const bucket = required("S3_BUCKET");
-  return `${base}/${bucket}/${key}`;
 };
 
 export async function POST(req: Request) {
@@ -93,27 +88,40 @@ export async function POST(req: Request) {
       `.${ext}`;
 
     const s3 = getS3();
-
     const buffer = Buffer.from(await file.arrayBuffer());
 
+    // 1) Upload privado
     await s3.send(
       new PutObjectCommand({
         Bucket: required("S3_BUCKET"),
         Key: key,
         Body: buffer,
         ContentType: file.type,
+        ContentDisposition: "inline",
       })
+    );
+
+    // 2) Presigned URL (GET) — expira em X segundos
+    const expiresIn = Number(process.env.S3_PRESIGN_EXPIRES || 60 * 60 * 24 * 7); // padrão: 7 dias
+
+    const signedUrl = await getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: required("S3_BUCKET"),
+        Key: key,
+        ResponseContentDisposition: "inline",
+        ResponseContentType: file.type,
+      }),
+      { expiresIn }
     );
 
     return NextResponse.json({
       key,
-      url: buildPublicUrl(key),
+      url: signedUrl, // ✅ este é o link que vai pro WhatsApp
+      expiresIn,
     });
   } catch (err: any) {
-    // 🔥 ESSENCIAL: isso vai aparecer nos logs do Netlify Functions
     console.error("[api/upload] ERROR:", err);
-
-    // tenta capturar infos comuns do AWS SDK sem expor segredo
     const status = err?.$metadata?.httpStatusCode || 500;
     const code = err?.name || err?.Code || undefined;
 
