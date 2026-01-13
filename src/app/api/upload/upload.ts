@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const required = (name: string) => {
   const v = process.env[name];
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   try {
     const form = await req.formData();
     const file = form.get("file");
-    const docType = String(form.get("docType") || "doc").toLowerCase();
+    const docTypeRaw = String(form.get("docType") || "doc").toLowerCase();
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Arquivo ausente." }, { status: 400 });
@@ -81,7 +82,8 @@ export async function POST(req: Request) {
     const ext = extFromType(file.type);
     const id = crypto.randomUUID();
     const date = new Date().toISOString().slice(0, 10);
-    const safeDoc = docType === "cpf" || docType === "cnh" ? docType : "doc";
+
+    const safeDoc = docTypeRaw === "cpf" || docTypeRaw === "cnh" ? docTypeRaw : "doc";
 
     const key =
       `reservas/${date}/` +
@@ -91,6 +93,7 @@ export async function POST(req: Request) {
       `.${ext}`;
 
     const s3 = getS3();
+
     const buffer = Buffer.from(await file.arrayBuffer());
 
     await s3.send(
@@ -107,8 +110,19 @@ export async function POST(req: Request) {
       url: buildPublicUrl(key),
     });
   } catch (err: any) {
+    // 🔥 ESSENCIAL: isso vai aparecer nos logs do Netlify Functions
+    console.error("[api/upload] ERROR:", err);
+
+    // tenta capturar infos comuns do AWS SDK sem expor segredo
+    const status = err?.$metadata?.httpStatusCode || 500;
+    const code = err?.name || err?.Code || undefined;
+
     return NextResponse.json(
-      { error: err?.message || "Erro interno no upload." },
+      {
+        error: err?.message || "Erro interno no upload.",
+        code,
+        status,
+      },
       { status: 500 }
     );
   }
