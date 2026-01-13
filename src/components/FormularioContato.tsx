@@ -6,7 +6,14 @@ import { FROTA } from "@/constants/carros";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Calculator } from "lucide-react";
 
-type UploadResult = { url: string; key: string };
+type UploadResult = {
+  url: string;
+  key: string;
+  shortUrl?: string | null;
+  code?: string;
+  expiresIn?: number;
+  expAt?: number;
+};
 
 export default function FormularioContato() {
   const searchParams = useSearchParams();
@@ -296,9 +303,6 @@ export default function FormularioContato() {
         ``,
         `Nome: ${form.nome}`,
         prefillLocal ? `Local: ${prefillLocal}` : null,
-        prefillCoords?.lat || prefillCoords?.lng
-          ? `Coords: ${prefillCoords.lat || ""}${prefillCoords.lat && prefillCoords.lng ? ", " : ""}${prefillCoords.lng || ""}`
-          : null,
         `Carro: ${form.carro}`,
         `Retirada: ${formatBR(form.dataRetirada)}`,
         `Devolução: ${formatBR(form.dataDevolucao)}`,
@@ -306,11 +310,12 @@ export default function FormularioContato() {
         `Estimativa (c/ lavagem): R$ ${total.toLocaleString("pt-BR")}`,
         ``,
         `Documentos (links):`,
-        `CPF: ${cpfUp.url}`,
-        `CNH: ${cnhUp.url}`,
+        `CPF: ${cpfUp.shortUrl || cpfUp.url}`,
+        `CNH: ${cnhUp.shortUrl || cnhUp.url}`,
       ]
         .filter(Boolean)
         .join("\n");
+
 
       const url = `https://wa.me/${CONTACT.phoneE164Digits}?text=${encodeURIComponent(
         msg

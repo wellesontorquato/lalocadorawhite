@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const runtime = "nodejs";
@@ -45,6 +50,54 @@ const getS3 = () => {
   });
 };
 
+const randomCode = (len = 8) => {
+  const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let out = "";
+  for (let i = 0; i < len; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return out;
+};
+
+const siteBase = () => {
+  const custom = process.env.PUBLIC_SITE_URL; // opcional (se tiver domínio próprio)
+  const netlifyUrl = process.env.URL; // Netlify define em produção
+  return (custom || netlifyUrl || "").replace(/\/$/, "");
+};
+
+async function shortCodeExists(s3: S3Client, bucket: string, code: string) {
+  try {
+    await s3.send(
+      new HeadObjectCommand({
+        Bucket: bucket,
+        Key: `short/${code}.json`,
+      })
+    );
+    return true;
+  } catch (err: any) {
+    // se não existe, o S3 responde 404/NotFound
+    const name = err?.name || "";
+    const codeName = err?.Code || "";
+    const status = err?.$metadata?.httpStatusCode;
+    if (status === 404 || name === "NotFound" || codeName === "NotFound") return false;
+    // outros erros: rethrow
+    throw err;
+  }
+}
+
+async function generateUniqueCode(s3: S3Client, bucket: string, len = 8, tries = 6) {
+  for (let i = 0; i < tries; i++) {
+    const code = randomCode(len);
+    const exists = await shortCodeExists(s3, bucket, code);
+    if (!exists) return code;
+  }
+  // fallback mais longo se bater colisão demais
+  for (let i = 0; i < tries; i++) {
+    const code = randomCode(Math.max(len + 2, 10));
+    const exists = await shortCodeExists(s3, bucket, code);
+    if (!exists) return code;
+  }
+  throw new Error("Falha ao gerar código curto (colisão). Tente novamente.");
+}
+
 export async function POST(req: Request) {
   try {
     const form = await req.formData();
@@ -89,11 +142,12 @@ export async function POST(req: Request) {
 
     const s3 = getS3();
     const buffer = Buffer.from(await file.arrayBuffer());
+    const bucket = required("S3_BUCKET");
 
     // 1) Upload privado
     await s3.send(
       new PutObjectCommand({
-        Bucket: required("S3_BUCKET"),
+        Bucket: bucket,
         Key: key,
         Body: buffer,
         ContentType: file.type,
@@ -101,13 +155,13 @@ export async function POST(req: Request) {
       })
     );
 
-    // 2) Presigned URL (GET) — expira em X segundos
-    const expiresIn = Number(process.env.S3_PRESIGN_EXPIRES || 60 * 60 * 24 * 7); // padrão: 7 dias
+    // 2) Presigned URL (GET)
+    const expiresIn = Number(process.env.S3_PRESIGN_EXPIRES || 60 * 60 * 24 * 7); // default 7 dias
 
     const signedUrl = await getSignedUrl(
       s3,
       new GetObjectCommand({
-        Bucket: required("S3_BUCKET"),
+        Bucket: bucket,
         Key: key,
         ResponseContentDisposition: "inline",
         ResponseContentType: file.type,
@@ -115,10 +169,31 @@ export async function POST(req: Request) {
       { expiresIn }
     );
 
+    // 3) Link curto (salva mapping no próprio bucket)
+    const code = await generateUniqueCode(s3, bucket, Number(process.env.SHORT_CODE_LEN || 8));
+    const shortKey = `short/${code}.json`;
+    const expAt = Date.now() + expiresIn * 1000;
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: shortKey,
+        Body: Buffer.from(JSON.stringify({ url: signedUrl, expAt, key }), "utf-8"),
+        ContentType: "application/json",
+        CacheControl: "no-store",
+      })
+    );
+
+    const base = siteBase();
+    const shortUrl = base ? `${base}/d/${code}` : null;
+
     return NextResponse.json({
       key,
-      url: signedUrl, // ✅ este é o link que vai pro WhatsApp
+      url: signedUrl,
+      shortUrl, // ✅ use esse no WhatsApp (bem menor)
+      code,
       expiresIn,
+      expAt,
     });
   } catch (err: any) {
     console.error("[api/upload] ERROR:", err);
