@@ -6,6 +6,8 @@ import { FROTA } from "@/constants/carros";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Calculator } from "lucide-react";
 
+type UploadResult = { url: string; key: string };
+
 export default function FormularioContato() {
   const searchParams = useSearchParams();
 
@@ -21,8 +23,16 @@ export default function FormularioContato() {
     quilometragem: "300km",
   });
 
+  // NOVO: arquivos CPF/CNH
+  const [cpfFile, setCpfFile] = useState<File | null>(null);
+  const [cnhFile, setCnhFile] = useState<File | null>(null);
+
   const [total, setTotal] = useState<number | null>(null);
   const [avisoData, setAvisoData] = useState<string>("");
+
+  // NOVO: estados de envio
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string>("");
 
   // Prefill vindo do Hero (/contato?local&retirada&devolucao&lat&lng)
   const [prefillLocal, setPrefillLocal] = useState<string>("");
@@ -122,6 +132,7 @@ export default function FormularioContato() {
   // =========================
   const onChangeRetirada = (value: string) => {
     setAvisoData("");
+    setSendError("");
 
     if (!value) {
       setForm((prev) => ({ ...prev, dataRetirada: "", dataDevolucao: "" }));
@@ -143,6 +154,7 @@ export default function FormularioContato() {
 
   const onChangeDevolucao = (value: string) => {
     setAvisoData("");
+    setSendError("");
 
     if (!value) {
       setForm((prev) => ({ ...prev, dataDevolucao: "" }));
@@ -204,43 +216,125 @@ export default function FormularioContato() {
       form.carro &&
       form.dataRetirada &&
       form.dataDevolucao &&
-      total !== null
+      total !== null &&
+      cpfFile &&
+      cnhFile
   );
 
   // =========================
-  // Submit -> WhatsApp
+  // Upload helpers
   // =========================
-  const enviarFormulario = (e: React.FormEvent<HTMLFormElement>) => {
+  const allowedTypes = new Set([
+    "image/png",
+    "image/jpeg",
+    "application/pdf",
+  ]);
+
+  const validateFile = (file: File | null, label: string) => {
+    if (!file) return `${label} é obrigatório.`;
+    if (!allowedTypes.has(file.type)) {
+      return `${label}: formato inválido. Envie PNG, JPG, JPEG ou PDF.`;
+    }
+    const maxMB = 8; // ajuste se quiser
+    const maxBytes = maxMB * 1024 * 1024;
+    if (file.size > maxBytes) {
+      return `${label}: arquivo muito grande (máx. ${maxMB}MB).`;
+    }
+    return "";
+  };
+
+  const uploadOne = async (file: File, docType: "cpf" | "cnh") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("docType", docType);
+
+    // opcional: manda info extra p/ compor o key
+    fd.append("nome", form.nome || "");
+    fd.append("carro", form.carro || "");
+    fd.append("retirada", form.dataRetirada || "");
+    fd.append("devolucao", form.dataDevolucao || "");
+
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: fd,
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const msg = data?.error || "Falha ao enviar arquivo. Tente novamente.";
+      throw new Error(msg);
+    }
+
+    return data as UploadResult;
+  };
+
+  // =========================
+  // Submit -> WhatsApp (com upload antes)
+  // =========================
+  const enviarFormulario = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     (document.activeElement as HTMLElement | null)?.blur?.();
+    setSendError("");
 
-    if (!pronto || total === null) return;
+    if (!pronto || total === null || !cpfFile || !cnhFile) return;
 
-    const msg = [
-      `Olá! Quero solicitar uma reserva na LA Locadora.`,
-      ``,
-      `Nome: ${form.nome}`,
-      prefillLocal ? `Local: ${prefillLocal}` : null,
-      `Carro: ${form.carro}`,
-      `Retirada: ${formatBR(form.dataRetirada)}`,
-      `Devolução: ${formatBR(form.dataDevolucao)}`,
-      `Quilometragem: ${form.quilometragem}`,
-      `Estimativa (c/ lavagem): R$ ${total.toLocaleString("pt-BR")}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
+    // validação final
+    const errCpf = validateFile(cpfFile, "CPF");
+    const errCnh = validateFile(cnhFile, "CNH");
+    const err = errCpf || errCnh;
+    if (err) {
+      setSendError(err);
+      return;
+    }
 
-    const url = `https://wa.me/${CONTACT.phoneE164Digits}?text=${encodeURIComponent(
-      msg
-    )}`;
-    window.location.href = url;
+    try {
+      setSending(true);
+
+      // 1) upload cpf + cnh
+      const [cpfUp, cnhUp] = await Promise.all([
+        uploadOne(cpfFile, "cpf"),
+        uploadOne(cnhFile, "cnh"),
+      ]);
+
+      // 2) monta msg com links
+      const msg = [
+        `Olá! Quero solicitar uma reserva na LA Locadora.`,
+        ``,
+        `Nome: ${form.nome}`,
+        prefillLocal ? `Local: ${prefillLocal}` : null,
+        prefillCoords?.lat || prefillCoords?.lng
+          ? `Coords: ${prefillCoords.lat || ""}${prefillCoords.lat && prefillCoords.lng ? ", " : ""}${prefillCoords.lng || ""}`
+          : null,
+        `Carro: ${form.carro}`,
+        `Retirada: ${formatBR(form.dataRetirada)}`,
+        `Devolução: ${formatBR(form.dataDevolucao)}`,
+        `Quilometragem: ${form.quilometragem}`,
+        `Estimativa (c/ lavagem): R$ ${total.toLocaleString("pt-BR")}`,
+        ``,
+        `Documentos (links):`,
+        `CPF: ${cpfUp.url}`,
+        `CNH: ${cnhUp.url}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const url = `https://wa.me/${CONTACT.phoneE164Digits}?text=${encodeURIComponent(
+        msg
+      )}`;
+
+      window.location.href = url;
+    } catch (err: any) {
+      setSendError(err?.message || "Erro ao enviar. Tente novamente.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <section className="font-display">
-      {/* fundo um pouco mais “premium” e com contraste melhor */}
       <div className="rounded-3xl border border-slate-300/70 bg-white shadow-[0_35px_110px_-85px_rgba(2,6,23,0.55)] overflow-hidden">
-        {/* HEADER DO FORM (mais contraste) */}
+        {/* HEADER DO FORM */}
         <div className="relative border-b border-slate-200 bg-slate-100 px-6 md:px-10 py-8 md:py-10">
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute -top-16 -right-20 h-[280px] w-[280px] rounded-full bg-brand-blue/15 blur-3xl" />
@@ -488,21 +582,91 @@ export default function FormularioContato() {
               </p>
             </div>
 
+            {/* 06 CPF (upload) */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                06. CPF (PNG/JPG/PDF)
+              </label>
+
+              <input
+                required
+                type="file"
+                accept=".png,.jpg,.jpeg,.pdf"
+                onChange={(e) => {
+                  setSendError("");
+                  const f = e.target.files?.[0] || null;
+                  setCpfFile(f);
+                }}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-900 font-bold outline-none
+                           file:mr-4 file:rounded-full file:border-0
+                           file:bg-slate-950 file:px-4 file:py-2 file:text-[10px]
+                           file:font-black file:uppercase file:tracking-[0.25em] file:text-white
+                           hover:file:bg-brand-blue hover:file:text-slate-950 transition"
+              />
+              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                {cpfFile ? `Selecionado: ${cpfFile.name}` : "Envie foto ou PDF do CPF."}
+              </p>
+            </div>
+
+            {/* 07 CNH (upload) */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-[0.35em] text-slate-600 font-black">
+                07. CNH (PNG/JPG/PDF)
+              </label>
+
+              <input
+                required
+                type="file"
+                accept=".png,.jpg,.jpeg,.pdf"
+                onChange={(e) => {
+                  setSendError("");
+                  const f = e.target.files?.[0] || null;
+                  setCnhFile(f);
+                }}
+                className="w-full rounded-2xl border border-slate-300/70 bg-slate-100 px-4 py-4
+                           text-slate-900 font-bold outline-none
+                           file:mr-4 file:rounded-full file:border-0
+                           file:bg-slate-950 file:px-4 file:py-2 file:text-[10px]
+                           file:font-black file:uppercase file:tracking-[0.25em] file:text-white
+                           hover:file:bg-brand-blue hover:file:text-slate-950 transition"
+              />
+              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                {cnhFile ? `Selecionado: ${cnhFile.name}` : "Envie foto ou PDF da CNH."}
+              </p>
+            </div>
+
+            {/* Erro de envio */}
+            <AnimatePresence>
+              {sendError && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.25 }}
+                  className="md:col-span-2 rounded-2xl border border-red-300/70 bg-red-50 px-5 py-4 text-[11px]
+                             uppercase tracking-[0.25em] font-black text-red-900"
+                >
+                  {sendError}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* CTA */}
             <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
               <div className="text-slate-700 text-sm font-normal">
-                Ao enviar, você será redirecionado para o WhatsApp para confirmar a reserva.
+                Ao enviar, vamos subir seus documentos e abrir o WhatsApp com os links.
               </div>
 
               <button
                 type="submit"
-                disabled={!pronto}
+                disabled={!pronto || sending}
                 className="group inline-flex items-center justify-center gap-3 rounded-full px-7 py-4
                            bg-slate-950 text-white text-[11px] font-black uppercase tracking-[0.25em]
                            hover:bg-brand-blue hover:text-slate-950 transition-all
                            disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-slate-950/15"
               >
-                Solicitar agora
+                {sending ? "Enviando..." : "Solicitar agora"}
                 <span className="grid place-items-center h-9 w-9 rounded-full bg-white/10 group-hover:bg-slate-950/10 transition">
                   <ArrowRight
                     size={18}
